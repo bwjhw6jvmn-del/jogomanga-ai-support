@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: jogomanga-ai-support
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    healthCheckPath: /
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: SUPPORT_URL
+        value: https://direct.lc.chat/14942394
