@@ -94,7 +94,6 @@ def telegram_send(chat_id, text, business_connection_id=None):
         )
 
         if not response.ok:
-            # Não registrar a URL, pois ela contém o token.
             logging.error(
                 "Telegram recusou o envio. HTTP %s. Resposta: %s",
                 response.status_code,
@@ -105,12 +104,16 @@ def telegram_send(chat_id, text, business_connection_id=None):
         return True
 
     except requests.RequestException as error:
-        logging.error("Erro de conexão ao enviar mensagem: %s", str(error))
+        logging.error(
+            "Erro de conexão ao enviar mensagem: %s",
+            str(error)
+        )
         return False
 
 
 def cancelar_timer(chave):
     timer = timers.pop(chave, None)
+
     if timer:
         timer.cancel()
 
@@ -120,6 +123,7 @@ def agendar_timer(chave, segundos, funcao):
 
     timer = threading.Timer(segundos, funcao)
     timer.daemon = True
+
     timers[chave] = timer
     timer.start()
 
@@ -144,7 +148,11 @@ def mostrar_menu(chave, chat_id, business_id):
     cancelar_timer(chave)
     estados[chave] = "menu"
 
-    telegram_send(chat_id, MENU, business_id)
+    telegram_send(
+        chat_id,
+        MENU,
+        business_id
+    )
 
     agendar_timer(
         chave,
@@ -168,7 +176,7 @@ def finalizar_espera_saque(chave, chat_id, business_id):
             business_id
         )
 
-        # Os 5 minutos começam somente após a mensagem de processamento.
+        # Os 5 minutos começam após a mensagem de processamento.
         agendar_timer(
             chave,
             300,
@@ -180,6 +188,7 @@ def finalizar_espera_saque(chave, chat_id, business_id):
 
 def processar_mensagem(chat_id, business_id, texto):
     chave = f"{chat_id}:{business_id or 'normal'}"
+
     texto = texto.strip()
     texto_minusculo = texto.lower()
 
@@ -196,6 +205,7 @@ def processar_mensagem(chat_id, business_id, texto):
 
             if texto == "3":
                 estados[chave] = "aguardando_codigo_w"
+
                 telegram_send(
                     chat_id,
                     RESPOSTAS["3"],
@@ -205,11 +215,13 @@ def processar_mensagem(chat_id, business_id, texto):
 
             if texto == "4":
                 estados[chave] = "aguardando_descricao"
+
                 telegram_send(
                     chat_id,
                     RESPOSTAS["4"],
                     business_id
                 )
+
                 agendar_timer(
                     chave,
                     300,
@@ -220,6 +232,7 @@ def processar_mensagem(chat_id, business_id, texto):
                 return
 
             estados[chave] = "menu"
+
             telegram_send(
                 chat_id,
                 RESPOSTAS[texto],
@@ -271,6 +284,7 @@ def processar_mensagem(chat_id, business_id, texto):
                     "Por favor, envie o código de comando começando com a letra W.",
                     business_id
                 )
+
             return
 
         # Não envia menu automaticamente para mensagens comuns.
@@ -286,8 +300,21 @@ def home():
 def telegram_webhook():
     update = request.get_json(silent=True) or {}
 
-    # Aceita mensagens comuns e mensagens do Telegram Business.
-    mensagem = update.get("business_message") or update.get("message")
+    logging.info(
+        "Atualização recebida do Telegram. Tipos: %s",
+        list(update.keys())
+    )
+
+    # Prioriza mensagens do Telegram Business.
+    mensagem = update.get("business_message")
+
+    if mensagem:
+        logging.info("Mensagem recebida pelo Telegram Business.")
+    else:
+        mensagem = update.get("message")
+
+        if mensagem:
+            logging.info("Mensagem recebida pelo chat comum.")
 
     if not mensagem:
         return jsonify({"ok": True})
@@ -298,10 +325,13 @@ def telegram_webhook():
     if not chat_id or chat.get("type") != "private":
         return jsonify({"ok": True})
 
-    if mensagem.get("from", {}).get("is_bot"):
+    remetente = mensagem.get("from", {})
+
+    if remetente.get("is_bot"):
         return jsonify({"ok": True})
 
     texto = mensagem.get("text", "")
+
     if not texto:
         return jsonify({"ok": True})
 
@@ -314,7 +344,9 @@ def telegram_webhook():
             texto
         )
     except Exception:
-        logging.exception("Erro ao processar mensagem do Telegram")
+        logging.exception(
+            "Erro ao processar mensagem do Telegram"
+        )
 
     return jsonify({"ok": True})
 
@@ -324,5 +356,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 10000))
     )
-
 
