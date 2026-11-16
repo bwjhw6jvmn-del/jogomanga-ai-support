@@ -148,7 +148,8 @@ def encerrar_por_inatividade(chave, chat_id, business_id):
             business_id
         )
 
-        estados[chave] = "menu"
+        # Conversa encerrada. Não apresentar menu automaticamente.
+        estados[chave] = "encerrado"
 
 
 def mostrar_menu(chave, chat_id, business_id):
@@ -201,9 +202,19 @@ def processar_mensagem(chat_id, business_id, texto):
 
     with lock:
 
-        # Menu solicitado pelo jogador.
+        # PRIMEIRA MENSAGEM:
+        # Qualquer texto recebido no início apresenta o menu.
+        if chave not in estados:
+            mostrar_menu(chave, chat_id, business_id)
+            return
+
+        # O menu só reaparece quando o jogador solicitar.
         if texto_minusculo in ("/start", "menu"):
             mostrar_menu(chave, chat_id, business_id)
+            return
+
+        # Conversa encerrada: só retorna ao menu se digitar "menu".
+        if estados.get(chave) == "encerrado":
             return
 
         # Opções de 1 a 6 funcionam em qualquer etapa.
@@ -255,7 +266,7 @@ def processar_mensagem(chat_id, business_id, texto):
             )
             return
 
-        estado = estados.get(chave, "menu")
+        estado = estados.get(chave)
 
         # Recebimento da descrição do problema.
         if estado == "aguardando_descricao":
@@ -294,7 +305,7 @@ def processar_mensagem(chat_id, business_id, texto):
 
             return
 
-        # Não envia menu automaticamente para mensagens comuns.
+        # Não apresenta menu para mensagens comuns.
         return
 
 
