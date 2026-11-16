@@ -4,14 +4,17 @@ import logging
 import threading
 import requests
 
-from flask import Flask, request, jsonify+
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s"
+)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}" if BOT_TOKEN else None
 
 MENU = (
     "Olá, sou a Lia, assistente virtual da Jogomanga! "
@@ -74,7 +77,7 @@ lock = threading.RLock()
 
 
 def telegram_send(chat_id, text, business_connection_id=None):
-    if not BOT_TOKEN:
+    if not BOT_TOKEN or not TELEGRAM_API:
         logging.error("TELEGRAM_BOT_TOKEN não configurado.")
         return False
 
@@ -198,12 +201,12 @@ def processar_mensagem(chat_id, business_id, texto):
 
     with lock:
 
-        # MENU pode ser solicitado em qualquer etapa.
+        # Menu solicitado pelo jogador.
         if texto_minusculo in ("/start", "menu"):
             mostrar_menu(chave, chat_id, business_id)
             return
 
-        # Qualquer opção de 1 a 6 funciona em qualquer etapa.
+        # Opções de 1 a 6 funcionam em qualquer etapa.
         if texto in ("1", "2", "3", "4", "5", "6"):
             cancelar_timer(chave)
 
@@ -327,6 +330,7 @@ def telegram_webhook():
     chat_id = chat.get("id")
 
     if not chat_id or chat.get("type") != "private":
+        logging.info("Mensagem ignorada: chat não privado ou sem ID.")
         return jsonify({"ok": True})
 
     remetente = mensagem.get("from", {})
@@ -337,9 +341,13 @@ def telegram_webhook():
     texto = mensagem.get("text", "")
 
     if not texto:
+        logging.info("Mensagem ignorada: sem texto.")
         return jsonify({"ok": True})
 
     business_id = mensagem.get("business_connection_id")
+
+    if business_id:
+        logging.info("ID de conexão Business recebido.")
 
     try:
         processar_mensagem(
@@ -348,9 +356,7 @@ def telegram_webhook():
             texto
         )
     except Exception:
-        logging.exception(
-            "Erro ao processar mensagem do Telegram"
-        )
+        logging.exception("Erro ao processar mensagem do Telegram")
 
     return jsonify({"ok": True})
 
@@ -360,4 +366,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 10000))
     )
-
