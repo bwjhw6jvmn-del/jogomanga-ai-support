@@ -14,88 +14,206 @@ logging.basicConfig(
 )
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}" if BOT_TOKEN else None
+TELEGRAM_API = (
+    f"https://api.telegram.org/bot{BOT_TOKEN}"
+    if BOT_TOKEN else None
+)
 
-MENU = (
-    "Olá, sou a Lia, assistente virtual da Jogomanga! "
-    "Estou aqui para ajudar. Selecione o tópico sobre o qual deseja tirar dúvidas:\n\n"
+TEMPO_INATIVIDADE = 300
+TEMPO_SAQUE = 60
+
+# =========================================================
+# MENSAGENS
+# =========================================================
+
+MENU_PRINCIPAL = (
+    "Olá, sou a Lia, assistente virtual do Grupo Manga! "
+    "Estou aqui para ajudar. Selecione sobre qual plataforma deseja tirar dúvidas:\n\n"
+    "1️⃣ Grupo Manga\n"
+    "2️⃣ JogoManga\n"
+    "3️⃣ Grupo T1\n"
+    "4️⃣ Grupo FP"
+)
+
+MENU_MANGA = (
+    "Selecione o assunto sobre o qual deseja atendimento:\n\n"
     "1️⃣ Recompensas e Promoções\n"
     "2️⃣ Questões relacionadas a parcerias\n"
     "3️⃣ Problemas com saques\n"
     "4️⃣ Conta e acesso\n"
-    "5️⃣ Suporte humano\n"
-    "6️⃣ Meu grupo VIP"
+    "5️⃣ Grupo VIP"
 )
 
-RESPOSTAS = {
-    "1": (
-        "Lia Support (IA) Oficial: Para qualquer dúvida sobre recompensas, "
-        "entre em contato com esta especialista em recompensas para obter ajuda. "
-        "Obrigada! https://t.me/Simmyonly"
-    ),
-    "2": (
-        "Lia Support (IA) Oficial: Telegram: https://t.me/lancamentosmanga "
-        "Participe deste grupo para saber mais sobre parcerias com as plataformas "
-        "MANGA e T1. Obrigada!"
-    ),
-    "3": (
-        "Lia Support (IA) Oficial: Inclua um código de comando começando "
-        "com a letra W em sua solicitação de saque."
-    ),
-    "4": (
-        "Lia Support (IA) Oficial: Descreva seu problema detalhadamente "
-        "para que possamos entender melhor e ajudá-lo(a)."
-    ),
-    "5": (
-        "Lia Support (IA) Oficial: Aguarde um momento enquanto encaminhamos "
-        "sua solicitação para nossa equipe de atendimento ao cliente."
-    ),
-    "6": (
-        "Lia Support (IA) Oficial: Para qualquer dúvida sobre seu Grupo VIP, "
-        "entre em contato com este especialista em VIPs para obter ajuda. "
-        "Obrigado! https://t.me/Simmyonly"
-    )
-}
+MENU_JOGOMANGA = (
+    "Selecione o assunto sobre o qual deseja atendimento:\n\n"
+    "1️⃣ Recompensas e Promoções\n"
+    "2️⃣ Questões relacionadas a parcerias\n"
+    "3️⃣ Problemas com saques\n"
+    "4️⃣ Conta e acesso\n"
+    "5️⃣ Grupo VIP"
+)
 
-MENSAGEM_SAQUE = (
-    "Lia Support (IA) Oficial: Aguarde, seu saque está sendo processado. "
-    "Os fundos chegarão em breve. Notificaremos você dentro de 10 minutos "
-    "a 24 horas. Caso não tenha recebido seu pagamento, verifique novamente "
-    "para obter uma atualização de confirmação. Agradecemos sua paciência."
+MENSAGEM_FORA_AUTONOMIA = (
+    "Lia Support (IA) Oficial:\n"
+    "Sinto muito, não sei como resolver isso. "
+    "Por favor, aguarde até que um de nossos representantes "
+    "entre nesta conversa. Obrigado!"
 )
 
 MENSAGEM_ENCERRAMENTO = (
-    'Lia Support (IA) Oficial: Olá, detectamos que você não respondeu. '
-    'Devido à falta de comunicação, encerramos a conversa. Obrigado! '
+    "Lia Support (IA) Oficial:\n"
+    "Olá, detectamos que você não respondeu. "
+    "Devido à falta de comunicação, encerramos a conversa. Obrigado!\n"
     'Se desejar retornar ao menu, digite "menu".'
 )
 
-# Estados e temporizadores em memória
+MENSAGEM_SAQUE = (
+    "Lia Support (IA) Oficial:\n"
+    "Por favor, aguarde; seu saque está sendo processado. "
+    "O valor será creditado na sua conta em breve. "
+    "Manteremos você informado em um prazo de até 10 minutos até 24 horas. "
+    "Se não receber os fundos, consulte novamente para obter atualizações "
+    "sobre a confirmação. Obrigado pela sua paciência."
+)
+
+# =========================================================
+# RESPOSTAS DO GRUPO MANGA
+# =========================================================
+
+RESPOSTAS_MANGA = {
+    "1": (
+        "Lia Support (IA) Oficial:\n"
+        "Para qualquer dúvida sobre recompensas, entre em contato "
+        "com esta especialista em recompensas para obter ajuda. Obrigada!\n"
+        "https://t.me/jogomanga_rowen"
+    ),
+
+    "2": (
+        "Lia Support (IA) Oficial:\n"
+        "Telegram: https://t.me/lancamentosmanga\n"
+        "Entre no chat para colaborações com as plataformas MANGA e T1, obrigado!"
+    ),
+
+    "3": (
+        "Lia Support (IA) Oficial:\n"
+        "Por favor, informe o número do pedido, que começa com a letra W, "
+        "em sua solicitação de retirada."
+    ),
+
+    "4": (
+        "Lia Support (IA) Oficial:\n"
+        "Para solicitar ou alterar sua senha de acesso, entre em contato "
+        "com nossa equipe de suporte online ou aguarde até que um de nossos "
+        "representantes entre nesta conversa:\n"
+        "https://direct.lc.chat/14942394\n"
+        "Lembre-se: não solicitamos senhas, códigos de acesso ou qualquer "
+        "tipo de pagamento. Obrigado."
+    ),
+
+    "5": (
+        "Lia Support (IA) Oficial:\n"
+        "Por favor, aguarde até que um de nossos representantes "
+        "entre nesta conversa. Obrigado."
+    )
+}
+
+# =========================================================
+# RESPOSTAS DO JOGOMANGA
+# =========================================================
+
+RESPOSTAS_JOGOMANGA = {
+    "1": (
+        "Lia Support (IA) Oficial:\n"
+        "Para qualquer dúvida sobre recompensas, entre em contato "
+        "com esta especialista em recompensas para obter ajuda. Obrigada!\n"
+        "https://t.me/Simmyonly"
+    ),
+
+    "2": (
+        "Lia Support (IA) Oficial:\n"
+        "Telegram: https://t.me/lancamentosmanga\n"
+        "Entre no chat para colaborações com as plataformas MANGA e T1, obrigado!"
+    ),
+
+    "3": (
+        "Lia Support (IA) Oficial:\n"
+        "Por favor, informe o número do pedido, que começa com a letra W, "
+        "em sua solicitação de retirada."
+    ),
+
+    "4": (
+        "Lia Support (IA) Oficial:\n"
+        "Para solicitar ou alterar sua senha de acesso, entre em contato "
+        "com este gerente:\n"
+        "https://t.me/Simmyonly\n"
+        "Lembre-se: não solicitamos senhas, códigos de acesso ou qualquer "
+        "tipo de pagamento. Obrigado."
+    ),
+
+    "5": (
+        "Lia Support (IA) Oficial:\n"
+        "Para qualquer dúvida sobre seu Grupo VIP, entre em contato "
+        "com este especialista em VIPs para obter ajuda. Obrigado!\n"
+        "https://t.me/Simmyonly"
+    )
+}
+
+# =========================================================
+# RESPOSTAS GRUPO T1 E GRUPO FP
+# =========================================================
+
+RESPOSTAS_PLATAFORMAS = {
+    "t1": (
+        "Lia Support (IA) Oficial:\n"
+        "Desculpe, não fui programado para resolver problemas do Grupo T1. "
+        "Por favor, entre em contato com o suporte online. Obrigado!\n"
+        "https://direct.lc.chat/14942394"
+    ),
+
+    "fp": (
+        "Lia Support (IA) Oficial:\n"
+        "Desculpe, não fui programado para resolver problemas do Grupo FP. "
+        "Por favor, entre em contato com o suporte online. Obrigado!\n"
+        "https://direct.lc.chat/14942394"
+    )
+}
+
+# =========================================================
+# ESTADOS E TEMPORIZADORES
+# =========================================================
+
 estados = {}
 timers = {}
 lock = threading.RLock()
 
 
-def telegram_send(chat_id, text, business_connection_id=None):
+def cancelar_timer(chave):
+    timer = timers.pop(chave, None)
+
+    if timer:
+        timer.cancel()
+
+
+def telegram_send(chat_id, texto, business_connection_id=None):
     if not BOT_TOKEN or not TELEGRAM_API:
         logging.error("TELEGRAM_BOT_TOKEN não configurado.")
         return False
 
     payload = {
         "chat_id": chat_id,
-        "text": text
+        "text": texto
     }
 
     if business_connection_id:
         payload["business_connection_id"] = business_connection_id
 
-    logging.info(
-        "Tentando enviar mensagem. Chat: %s | Business: %s",
-        chat_id,
-        bool(business_connection_id)
-    )
-
     try:
+        logging.info(
+            "Tentando enviar mensagem. Chat: %s | Business: %s",
+            chat_id,
+            bool(business_connection_id)
+        )
+
         response = requests.post(
             f"{TELEGRAM_API}/sendMessage",
             json=payload,
@@ -110,29 +228,18 @@ def telegram_send(chat_id, text, business_connection_id=None):
             )
             return False
 
+        resultado = response.json()
+
+        if not resultado.get("ok"):
+            logging.error("Telegram retornou erro: %s", resultado)
+            return False
+
         logging.info("Mensagem enviada com sucesso ao Telegram.")
         return True
 
     except requests.RequestException:
         logging.exception("Erro de conexão ao enviar mensagem.")
         return False
-
-
-def cancelar_timer(chave):
-    timer = timers.pop(chave, None)
-
-    if timer:
-        timer.cancel()
-
-
-def agendar_timer(chave, segundos, funcao):
-    cancelar_timer(chave)
-
-    timer = threading.Timer(segundos, funcao)
-    timer.daemon = True
-
-    timers[chave] = timer
-    timer.start()
 
 
 def encerrar_por_inatividade(chave, chat_id, business_id):
@@ -142,57 +249,127 @@ def encerrar_por_inatividade(chave, chat_id, business_id):
         if chave not in estados:
             return
 
-        telegram_send(
+        if estados[chave] == "encerrado":
+            return
+
+        sucesso = telegram_send(
             chat_id,
             MENSAGEM_ENCERRAMENTO,
             business_id
         )
 
-        # Conversa encerrada. Não apresentar menu automaticamente.
-        estados[chave] = "encerrado"
+        if sucesso:
+            estados[chave] = "encerrado"
+            logging.info("Atendimento encerrado por inatividade: %s", chave)
 
 
-def mostrar_menu(chave, chat_id, business_id):
+def agendar_inatividade(chave, chat_id, business_id):
     cancelar_timer(chave)
-    estados[chave] = "menu"
 
-    telegram_send(
+    timer = threading.Timer(
+        TEMPO_INATIVIDADE,
+        encerrar_por_inatividade,
+        args=(chave, chat_id, business_id)
+    )
+
+    timer.daemon = True
+    timers[chave] = timer
+    timer.start()
+
+    logging.info("Temporizador de inatividade iniciado: %s", chave)
+
+
+def enviar_resposta(chave, chat_id, texto, business_id):
+    sucesso = telegram_send(
         chat_id,
-        MENU,
+        texto,
         business_id
     )
 
-    agendar_timer(
+    if sucesso:
+        agendar_inatividade(chave, chat_id, business_id)
+
+    return sucesso
+
+
+def mostrar_menu_principal(chave, chat_id, business_id):
+    cancelar_timer(chave)
+
+    estados[chave] = "menu_principal"
+
+    enviar_resposta(
         chave,
-        300,
-        lambda: encerrar_por_inatividade(
-            chave, chat_id, business_id
-        )
+        chat_id,
+        MENU_PRINCIPAL,
+        business_id
     )
 
 
+def mostrar_menu_plataforma(chave, chat_id, business_id, plataforma):
+    cancelar_timer(chave)
+
+    estados[chave] = f"menu_{plataforma}"
+
+    if plataforma == "manga":
+        mensagem = MENU_MANGA
+
+    else:
+        mensagem = MENU_JOGOMANGA
+
+    enviar_resposta(
+        chave,
+        chat_id,
+        mensagem,
+        business_id
+    )
+
+
+# =========================================================
+# TEMPORIZADOR DE SAQUE
+# =========================================================
+
 def finalizar_espera_saque(chave, chat_id, business_id):
     with lock:
-        timers.pop(chave, None)
+        timers.pop(f"{chave}:saque", None)
 
         if estados.get(chave) != "aguardando_saque":
             return
 
-        telegram_send(
+        estados[chave] = "atendimento_ativo"
+
+        enviar_resposta(
+            chave,
             chat_id,
             MENSAGEM_SAQUE,
             business_id
         )
 
-        # Os 5 minutos começam após a mensagem de processamento.
-        agendar_timer(
-            chave,
-            300,
-            lambda: encerrar_por_inatividade(
-                chave, chat_id, business_id
-            )
-        )
+        logging.info("Mensagem de processamento de saque enviada.")
 
+
+def iniciar_temporizador_saque(chave, chat_id, business_id):
+    cancelar_timer(chave)
+
+    cancelar_timer(f"{chave}:saque")
+
+    estados[chave] = "aguardando_saque"
+
+    timer = threading.Timer(
+        TEMPO_SAQUE,
+        finalizar_espera_saque,
+        args=(chave, chat_id, business_id)
+    )
+
+    timer.daemon = True
+    timers[f"{chave}:saque"] = timer
+    timer.start()
+
+    logging.info("Temporizador de saque de 1 minuto iniciado: %s", chave)
+
+
+# =========================================================
+# PROCESSAMENTO DAS MENSAGENS
+# =========================================================
 
 def processar_mensagem(chat_id, business_id, texto):
     chave = f"{chat_id}:{business_id or 'normal'}"
@@ -202,116 +379,209 @@ def processar_mensagem(chat_id, business_id, texto):
 
     with lock:
 
-        # PRIMEIRA MENSAGEM:
-        # Qualquer texto recebido no início apresenta o menu.
-        if chave not in estados:
-            mostrar_menu(chave, chat_id, business_id)
-            return
+        # Toda mensagem recebida cancela o temporizador
+        # de inatividade de 5 minutos.
+        cancelar_timer(chave)
 
-        # O menu só reaparece quando o jogador solicitar.
-        if texto_minusculo in ("/start", "menu"):
-            mostrar_menu(chave, chat_id, business_id)
-            return
+        # Menu solicitado pelo jogador.
+        if texto_minusculo in ("menu", "/start"):
+            cancelar_timer(f"{chave}:saque")
 
-        # Conversa encerrada: só retorna ao menu se digitar "menu".
-        if estados.get(chave) == "encerrado":
-            return
-
-        # Opções de 1 a 6 funcionam em qualquer etapa.
-        if texto in ("1", "2", "3", "4", "5", "6"):
-            cancelar_timer(chave)
-
-            if texto == "3":
-                estados[chave] = "aguardando_codigo_w"
-
-                telegram_send(
-                    chat_id,
-                    RESPOSTAS["3"],
-                    business_id
-                )
-                return
-
-            if texto == "4":
-                estados[chave] = "aguardando_descricao"
-
-                telegram_send(
-                    chat_id,
-                    RESPOSTAS["4"],
-                    business_id
-                )
-
-                agendar_timer(
-                    chave,
-                    300,
-                    lambda: encerrar_por_inatividade(
-                        chave, chat_id, business_id
-                    )
-                )
-                return
-
-            estados[chave] = "menu"
-
-            telegram_send(
+            mostrar_menu_principal(
+                chave,
                 chat_id,
-                RESPOSTAS[texto],
                 business_id
             )
+            return
 
-            agendar_timer(
+        # Primeira mensagem: qualquer conteúdo apresenta o menu.
+        if chave not in estados:
+            mostrar_menu_principal(
                 chave,
-                300,
-                lambda: encerrar_por_inatividade(
-                    chave, chat_id, business_id
-                )
+                chat_id,
+                business_id
             )
             return
 
         estado = estados.get(chave)
 
-        # Recebimento da descrição do problema.
-        if estado == "aguardando_descricao":
-            cancelar_timer(chave)
-            estados[chave] = "menu"
+        # Após encerramento, somente menu ou /start reinicia.
+        if estado == "encerrado":
+            return
 
-            # Não apresenta o menu automaticamente.
-            agendar_timer(
-                chave,
-                300,
-                lambda: encerrar_por_inatividade(
-                    chave, chat_id, business_id
+        # -------------------------------------------------
+        # MENU PRINCIPAL
+        # -------------------------------------------------
+
+        if estado == "menu_principal":
+
+            if texto == "1":
+                mostrar_menu_plataforma(
+                    chave, chat_id, business_id, "manga"
                 )
+                return
+
+            if texto == "2":
+                mostrar_menu_plataforma(
+                    chave, chat_id, business_id, "jogomanga"
+                )
+                return
+
+            if texto == "3":
+                estados[chave] = "atendimento_ativo"
+
+                enviar_resposta(
+                    chave,
+                    chat_id,
+                    RESPOSTAS_PLATAFORMAS["t1"],
+                    business_id
+                )
+                return
+
+            if texto == "4":
+                estados[chave] = "atendimento_ativo"
+
+                enviar_resposta(
+                    chave,
+                    chat_id,
+                    RESPOSTAS_PLATAFORMAS["fp"],
+                    business_id
+                )
+                return
+
+            enviar_resposta(
+                chave,
+                chat_id,
+                MENSAGEM_FORA_AUTONOMIA,
+                business_id
             )
             return
 
-        # Recebimento do código W.
-        if estado == "aguardando_codigo_w":
-            if texto.upper().startswith("W"):
-                cancelar_timer(chave)
-                estados[chave] = "aguardando_saque"
+        # -------------------------------------------------
+        # MENU GRUPO MANGA
+        # -------------------------------------------------
 
-                agendar_timer(
-                    chave,
-                    120,
-                    lambda: finalizar_espera_saque(
-                        chave, chat_id, business_id
+        if estado == "menu_manga":
+
+            if texto in RESPOSTAS_MANGA:
+
+                if texto == "3":
+                    estados[chave] = "aguardando_codigo_manga"
+
+                    enviar_resposta(
+                        chave,
+                        chat_id,
+                        RESPOSTAS_MANGA["3"],
+                        business_id
                     )
-                )
-            else:
-                telegram_send(
+                    return
+
+                estados[chave] = "atendimento_ativo"
+
+                enviar_resposta(
+                    chave,
                     chat_id,
-                    "Por favor, envie o código de comando começando com a letra W.",
+                    RESPOSTAS_MANGA[texto],
                     business_id
                 )
+                return
 
+            enviar_resposta(
+                chave,
+                chat_id,
+                MENSAGEM_FORA_AUTONOMIA,
+                business_id
+            )
             return
 
-        # Não apresenta menu para mensagens comuns.
-        return
+        # -------------------------------------------------
+        # MENU JOGOMANGA
+        # -------------------------------------------------
 
+        if estado == "menu_jogomanga":
+
+            if texto in RESPOSTAS_JOGOMANGA:
+
+                if texto == "3":
+                    estados[chave] = "aguardando_codigo_jogomanga"
+
+                    enviar_resposta(
+                        chave,
+                        chat_id,
+                        RESPOSTAS_JOGOMANGA["3"],
+                        business_id
+                    )
+                    return
+
+                estados[chave] = "atendimento_ativo"
+
+                enviar_resposta(
+                    chave,
+                    chat_id,
+                    RESPOSTAS_JOGOMANGA[texto],
+                    business_id
+                )
+                return
+
+            enviar_resposta(
+                chave,
+                chat_id,
+                MENSAGEM_FORA_AUTONOMIA,
+                business_id
+            )
+            return
+
+        # -------------------------------------------------
+        # RECEBIMENTO DO CÓDIGO DE SAQUE
+        # -------------------------------------------------
+
+        if estado in (
+            "aguardando_codigo_manga",
+            "aguardando_codigo_jogomanga"
+        ):
+
+            if texto.upper().startswith("W") and len(texto) > 1:
+
+                iniciar_temporizador_saque(
+                    chave,
+                    chat_id,
+                    business_id
+                )
+                return
+
+            enviar_resposta(
+                chave,
+                chat_id,
+                MENSAGEM_FORA_AUTONOMIA,
+                business_id
+            )
+            return
+
+        # -------------------------------------------------
+        # OUTRAS MENSAGENS
+        # -------------------------------------------------
+
+        if estado == "aguardando_saque":
+            # A contagem de 1 minuto continua.
+            # O jogador pode digitar "menu" para cancelá-la.
+            return
+
+        # Qualquer mensagem fora dos fluxos previstos.
+        enviar_resposta(
+            chave,
+            chat_id,
+            MENSAGEM_FORA_AUTONOMIA,
+            business_id
+        )
+
+
+# =========================================================
+# ROTAS FLASK
+# =========================================================
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Jogo Manga Support Bot online", 200
+    return "Lia Support (IA) Oficial online", 200
 
 
 @app.route("/telegram/webhook", methods=["POST"])
@@ -328,6 +598,7 @@ def telegram_webhook():
 
     if mensagem:
         logging.info("Mensagem recebida pelo Telegram Business.")
+
     else:
         mensagem = update.get("message")
 
@@ -352,7 +623,7 @@ def telegram_webhook():
     texto = mensagem.get("text", "")
 
     if not texto:
-        logging.info("Mensagem ignorada: sem texto.")
+        logging.info("Mensagem ignorada: mensagem sem texto.")
         return jsonify({"ok": True})
 
     business_id = mensagem.get("business_connection_id")
@@ -366,11 +637,16 @@ def telegram_webhook():
             business_id,
             texto
         )
+
     except Exception:
-        logging.exception("Erro ao processar mensagem do Telegram")
+        logging.exception("Erro ao processar mensagem do Telegram.")
 
     return jsonify({"ok": True})
 
+
+# =========================================================
+# INICIALIZAÇÃO
+# =========================================================
 
 if __name__ == "__main__":
     app.run(
