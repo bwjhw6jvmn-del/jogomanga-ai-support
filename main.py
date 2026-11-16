@@ -1,177 +1,109 @@
 
 import os
+import re
+import time
+import threading
 import logging
 import requests
+
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-SUPPORT_URL = os.getenv(
-    "SUPPORT_URL",
-    "https://t.me/jogomanga_Rowen"
-).strip()
+# CONFIGURAÇÕES
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# CONTROLE DE ATENDIMENTO
+atendimentos = {}
+timers_inatividade = {}
+timers_saque = {}
+lock = threading.RLock()
 
-# ==========================================
-# RESPOSTAS AUTOMÁTICAS DA JOGO MANGA
-# ==========================================
+TEMPO_INATIVIDADE = 300  # 5 minutos
+TEMPO_SAQUE = 120        # 2 minutos
 
-def responder(mensagem):
 
-    texto = (mensagem or "").lower().strip()
+# MENU PRINCIPAL
+MENU = """Olá, sou a Lia, assistente virtual da Jogomanga! Estou aqui para ajudar. Selecione o tópico sobre o qual deseja tirar dúvidas:
 
-    # SAUDAÇÕES
-    if any(p in texto for p in [
-        "oi", "olá", "ola", "bom dia",
-        "boa tarde", "boa noite"
-    ]):
-        return (
-            "Olá! Seja bem-vindo ao suporte oficial da Jogo Manga.\n\n"
-            "Estamos aqui para ajudar.\n\n"
-            "Selecione uma opção:\n\n"
-            "1️⃣ Bônus e promoções\n"
-            "2️⃣ Depósitos\n"
-            "3️⃣ Saques\n"
-            "4️⃣ Conta e acesso\n"
-            "5️⃣ Atendimento humano\n\n"
-            "Digite o número correspondente ou escreva sua dúvida."
-        )
+1️⃣ Recompensas e Promoções
+2️⃣ Questões relacionadas a parcerias
+3️⃣ Problemas com saques
+4️⃣ Conta e acesso
+5️⃣ Suporte humano
+6️⃣ Meu grupo VIP
 
-    # MENU NUMÉRICO
-    if texto == "1":
-        return (
-            "🎁 BÔNUS E PROMOÇÕES\n\n"
-            "Para consultar um bônus ou benefício VIP, "
-            "informe seu usuário e o nome da promoção.\n\n"
-            "Nossa equipe poderá confirmar as condições.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+Digite o número da opção desejada."""
 
-    if texto == "2":
-        return (
-            "💳 DEPÓSITOS\n\n"
-            "Se realizou um depósito e o valor ainda não apareceu "
-            "na sua conta, entre em contato com nossa equipe.\n\n"
-            "Tenha em mãos o valor, horário e comprovante. "
-            "Oculte informações bancárias sensíveis.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
 
-    if texto == "3":
-        return (
-            "💰 SAQUES\n\n"
-            "Para consultar uma solicitação de saque, "
-            "informe seu usuário, valor e horário da solicitação "
-            "à nossa equipe.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+# RESPOSTAS DAS OPÇÕES
+RESPOSTAS = {
+    "1": """Lia Support (IA) Oficial: Para qualquer dúvida sobre recompensas, entre em contato com esta especialista em recompensas para obter ajuda. Obrigada! https://t.me/Simmyonly""",
 
-    if texto == "4":
-        return (
-            "🔐 CONTA E ACESSO\n\n"
-            "Está enfrentando dificuldades para acessar sua conta "
-            "ou realizar um cadastro?\n\n"
-            "Descreva o problema apresentado na tela.\n\n"
-            "Nunca envie sua senha ou códigos de segurança.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+    "2": """Lia Support (IA) Oficial: Telegram: https://t.me/lancamentosmanga Participe deste grupo para saber mais sobre parcerias com as plataformas MANGA e T1. Obrigada!""",
 
-    if texto == "5":
-        return (
-            "👨‍💻 ATENDIMENTO HUMANO\n\n"
-            "Para falar diretamente com nossa equipe, "
-            "acesse o canal de atendimento:\n\n"
-            + SUPPORT_URL
-        )
+    "3": """Lia Support (IA) Oficial: Inclua um código de comando começando com a letra W em sua solicitação de saque.""",
 
-    # IDENTIFICAÇÃO DE ASSUNTOS
+    "4": """Lia Support (IA) Oficial: Descreva seu problema detalhadamente para que possamos entender melhor e ajudá-lo(a).""",
 
-    if any(p in texto for p in [
-        "bônus", "bonus", "promoção",
-        "promocao", "vip", "benefício"
-    ]):
-        return (
-            "Para consultar bônus e benefícios VIP, "
-            "informe seu usuário e qual promoção deseja verificar.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+    "5": """Lia Support (IA) Oficial: Aguarde um momento enquanto encaminhamos sua solicitação para nossa equipe de atendimento ao cliente.""",
 
-    if any(p in texto for p in [
-        "depósito", "deposito", "pix",
-        "depositar", "pagamento"
-    ]):
-        return (
-            "Se o depósito foi debitado e não apareceu na conta, "
-            "entre em contato com nossa equipe e informe o valor, "
-            "horário e comprovante.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+    "6": """Lia Support (IA) Oficial: Para qualquer dúvida sobre recompensas, entre em contato com este especialista em recompensas para obter ajuda. Obrigado! https://t.me/Simmyonly"""
+}
 
-    if any(p in texto for p in [
-        "saque", "retirada", "retirar",
-        "sacar", "transferência"
-    ]):
-        return (
-            "Para verificar seu saque, fale com nossa equipe "
-            "informando seu usuário, valor e horário da solicitação.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
 
-    if any(p in texto for p in [
-        "senha", "login", "entrar",
-        "acesso", "cadastro", "conta"
-    ]):
-        return (
-            "Descreva o problema que está enfrentando "
-            "ao acessar sua conta.\n\n"
-            "Por segurança, nunca envie sua senha "
-            "ou códigos de autenticação.\n\n"
-            "Atendimento: " + SUPPORT_URL
-        )
+# RESPOSTA APÓS 2 MINUTOS DO CÓDIGO W
+RESPOSTA_SAQUE_PROCESSANDO = """Lia Support (IA) Oficial: Aguarde, seu saque está sendo processado. Os fundos chegarão em breve. Notificaremos você dentro de 10 minutos a 24 horas. Caso não tenha recebido seu pagamento, verifique novamente para obter uma atualização de confirmação. Agradecemos sua paciência."""
 
-    if any(p in texto for p in [
-        "atendente", "humano",
-        "pessoa", "suporte"
-    ]):
-        return (
-            "Para falar com um atendente da Jogo Manga, "
-            "acesse:\n\n" + SUPPORT_URL
-        )
 
-    # RESPOSTA PADRÃO
+# ENCERRAMENTO POR INATIVIDADE
+RESPOSTA_INATIVIDADE = """Lia Support (IA) Oficial: Olá, detectamos que você não respondeu. Devido à falta de comunicação, encerramos a conversa. Obrigado! Se desejar retornar ao menu, digite "menu"."""
 
-    return (
-        "Obrigado por entrar em contato com a Jogo Manga!\n\n"
-        "Não encontrei uma resposta automática para sua dúvida.\n\n"
-        "Você pode selecionar uma das opções:\n\n"
-        "1️⃣ Bônus e promoções\n"
-        "2️⃣ Depósitos\n"
-        "3️⃣ Saques\n"
-        "4️⃣ Conta e acesso\n"
-        "5️⃣ Atendimento humano\n\n"
-        "Se preferir, fale diretamente com nossa equipe:\n"
-        + SUPPORT_URL
+
+# PALAVRAS-CHAVE CADASTRADAS
+RESPOSTAS_PALAVRAS = [
+    (
+        ["bonus", "bônus", "recompensa", "recompensas", "promoção", "promocao"],
+        """Para qualquer dúvida sobre bônus, entre em contato com este especialista em bônus para obter consultoria. Obrigado! https://t.me/Simmyonly"""
+    ),
+    (
+        ["cooperação", "cooperacao", "parceria", "parcerias"],
+        """Telegram: https://t.me/lancamentosmanga
+Entre no chat para colaborações com as plataformas MANGA e T1, obrigado!"""
+    ),
+    (
+        ["grupo vip"],
+        """Se você ainda tiver dúvidas sobre sua categoria, entre em contato com Simmy. https://t.me/Simmyonly"""
+    ),
+    (
+        [
+            "não estou conseguindo sacar o dinheirinho que depositei",
+            "nao estou conseguindo sacar o dinheirinho que depositei"
+        ],
+        """Olá, nosso plataforma possui um mecanismo de rollover. Isso significa que, após o seu depósito, você precisa apostar um montante igual ao valor depositado para cumprir os requisitos de rollover e desbloquear a barra de progresso.
+Por exemplo: se você depositar 50 yuan, precisará acumular apostas de 50 yuan. Não é necessário apostar tudo de uma vez; você pode fazer apostas em várias etapas, gradualmente, até atingir o requisito e completar a barra de progresso de rollover."""
+    ),
+    (
+        [
+            "problemas no saque",
+            "problema no saque",
+            "meu saque não caiu",
+            "meu saque nao caiu",
+            "meu saque está demorando",
+            "meu saque esta demorando"
+        ],
+        """Por favor, forneça o código de comando começando com a letra W em seu pedido de saque."""
     )
+]
 
 
-# ==========================================
-# ENVIO DE MENSAGENS AO TELEGRAM
-# ==========================================
-
-def enviar_mensagem(
-    chat_id,
-    mensagem,
-    business_connection_id=None
-):
-
+def enviar_mensagem(chat_id, mensagem, business_connection_id=None):
     if not BOT_TOKEN:
-        logging.error(
-            "TELEGRAM_BOT_TOKEN não configurado."
-        )
+        logging.error("TELEGRAM_BOT_TOKEN não configurado.")
         return
 
     dados = {
@@ -180,149 +112,284 @@ def enviar_mensagem(
     }
 
     if business_connection_id:
-        dados["business_connection_id"] = (
-            business_connection_id
-        )
+        dados["business_connection_id"] = business_connection_id
 
-    resposta = requests.post(
-        TELEGRAM_API + "/sendMessage",
-        json=dados,
-        timeout=20
+    try:
+        resposta = requests.post(
+            f"{TELEGRAM_API}/sendMessage",
+            json=dados,
+            timeout=20
+        )
+        if not resposta.ok:
+            logging.error("Erro ao enviar mensagem: %s", resposta.text)
+
+    except requests.RequestException:
+        logging.exception("Falha na comunicação com o Telegram.")
+
+
+def chave_atendimento(chat_id, business_connection_id):
+    return f"{chat_id}:{business_connection_id or 'normal'}"
+
+
+def cancelar_timer(timer):
+    if timer:
+        timer.cancel()
+
+
+def encerrar_por_inatividade(chat_id, business_connection_id, chave):
+    with lock:
+        atendimento = atendimentos.get(chave)
+
+        if not atendimento:
+            return
+
+        atendimento["estado"] = "encerrado"
+        atendimento["aguardando_menu"] = True
+        timers_inatividade.pop(chave, None)
+
+    enviar_mensagem(
+        chat_id,
+        RESPOSTA_INATIVIDADE,
+        business_connection_id
     )
 
-    resposta.raise_for_status()
+
+def reiniciar_timer_inatividade(chat_id, business_connection_id, chave):
+    with lock:
+        timer_antigo = timers_inatividade.get(chave)
+        cancelar_timer(timer_antigo)
+
+        timer = threading.Timer(
+            TEMPO_INATIVIDADE,
+            encerrar_por_inatividade,
+            args=(chat_id, business_connection_id, chave)
+        )
+
+        timer.daemon = True
+        timers_inatividade[chave] = timer
+        timer.start()
 
 
-# ==========================================
-# VERIFICAÇÃO DO SERVIDOR
-# ==========================================
+def enviar_resposta_saque(chat_id, business_connection_id, chave):
+    with lock:
+        atendimento = atendimentos.get(chave)
+
+        if not atendimento:
+            return
+
+        if atendimento.get("estado") != "aguardando_confirmacao_saque":
+            return
+
+        atendimento["estado"] = "saque_processando"
+        timers_saque.pop(chave, None)
+
+    enviar_mensagem(
+        chat_id,
+        RESPOSTA_SAQUE_PROCESSANDO,
+        business_connection_id
+    )
+
+
+def agendar_resposta_saque(chat_id, business_connection_id, chave):
+    with lock:
+        timer_antigo = timers_saque.get(chave)
+        cancelar_timer(timer_antigo)
+
+        timer = threading.Timer(
+            TEMPO_SAQUE,
+            enviar_resposta_saque,
+            args=(chat_id, business_connection_id, chave)
+        )
+
+        timer.daemon = True
+        timers_saque[chave] = timer
+        timer.start()
+
+
+def normalizar(texto):
+    return texto.strip().lower()
+
+
+def procurar_palavra_chave(texto):
+    texto = normalizar(texto)
+
+    for palavras, resposta in RESPOSTAS_PALAVRAS:
+        for palavra in palavras:
+            if palavra in texto:
+                return resposta
+
+    return None
+
+
+def processar_mensagem(chat_id, texto, business_connection_id=None):
+    chave = chave_atendimento(chat_id, business_connection_id)
+    texto_original = texto.strip()
+    texto = normalizar(texto_original)
+
+    with lock:
+        if chave not in atendimentos:
+            atendimentos[chave] = {
+                "estado": "menu",
+                "aguardando_menu": True
+            }
+
+    reiniciar_timer_inatividade(
+        chat_id,
+        business_connection_id,
+        chave
+    )
+
+    # COMANDO MENU
+    if texto == "menu":
+        with lock:
+            atendimentos[chave]["estado"] = "menu"
+            atendimentos[chave]["aguardando_menu"] = True
+
+        enviar_mensagem(chat_id, MENU, business_connection_id)
+        return
+
+    with lock:
+        atendimento = atendimentos[chave]
+        estado = atendimento.get("estado", "menu")
+        aguardando_menu = atendimento.get("aguardando_menu", True)
+
+    # MENU PRINCIPAL: ESCOLHA NUMÉRICA
+    if aguardando_menu and texto in RESPOSTAS:
+        with lock:
+            atendimentos[chave]["aguardando_menu"] = False
+
+        if texto == "3":
+            with lock:
+                atendimentos[chave]["estado"] = "aguardando_codigo_w"
+
+        elif texto == "4":
+            with lock:
+                atendimentos[chave]["estado"] = "aguardando_descricao"
+
+        elif texto == "5":
+            with lock:
+                atendimentos[chave]["estado"] = "suporte_humano"
+
+        else:
+            with lock:
+                atendimentos[chave]["estado"] = "atendido"
+
+        enviar_mensagem(
+            chat_id,
+            RESPOSTAS[texto],
+            business_connection_id
+        )
+        return
+
+    # RECEBIMENTO DO CÓDIGO W
+    if estado == "aguardando_codigo_w":
+        codigo_w = re.search(r"\bW[A-Za-z0-9_-]*", texto_original, re.IGNORECASE)
+
+        if codigo_w:
+            with lock:
+                atendimentos[chave]["estado"] = "aguardando_confirmacao_saque"
+
+            agendar_resposta_saque(
+                chat_id,
+                business_connection_id,
+                chave
+            )
+        else:
+            enviar_mensagem(
+                chat_id,
+                RESPOSTAS["3"],
+                business_connection_id
+            )
+
+        return
+
+    # CONTA E ACESSO: RECEBE A DESCRIÇÃO DO PROBLEMA
+    if estado == "aguardando_descricao":
+        resposta = procurar_palavra_chave(texto)
+
+        if resposta:
+            enviar_mensagem(chat_id, resposta, business_connection_id)
+        else:
+            enviar_mensagem(
+                chat_id,
+                """Por favor, explique claramente o problema que está enfrentando para que possamos entender e ajudá-lo(a) melhor.""",
+                business_connection_id
+            )
+        return
+
+    # IDENTIFICAÇÃO DE PALAVRAS-CHAVE EM MENSAGENS LIVRES
+    resposta = procurar_palavra_chave(texto)
+
+    if resposta:
+        enviar_mensagem(chat_id, resposta, business_connection_id)
+        return
+
+    # RESPOSTA PADRÃO
+    enviar_mensagem(
+        chat_id,
+        """Por favor, explique claramente o problema que está enfrentando para que possamos entender e ajudá-lo(a) melhor.""",
+        business_connection_id
+    )
+
 
 @app.route("/", methods=["GET"])
 def inicio():
-
     return jsonify({
         "status": "online",
-        "bot": "Jogo Manga",
-        "modo": "atendimento_automatico_gratuito"
+        "bot": "Lia - Jogo Manga"
     })
 
 
-# ==========================================
-# WEBHOOK DO TELEGRAM
-# ==========================================
-
-@app.route(
-    "/telegram/webhook",
-    methods=["POST"]
-)
-def telegram_webhook():
-
-    # Proteção opcional do webhook.
-    # Se WEBHOOK_SECRET estiver configurado no Render,
-    # precisa ser exatamente igual ao segredo do setWebhook.
-
-    segredo = os.getenv(
-        "WEBHOOK_SECRET", ""
-    ).strip()
-
-    if segredo:
-
-        recebido = request.headers.get(
-            "X-Telegram-Bot-Api-Secret-Token",
-            ""
+@app.route("/telegram/webhook", methods=["POST"])
+def webhook():
+    if WEBHOOK_SECRET:
+        secret_recebido = request.headers.get(
+            "X-Telegram-Bot-Api-Secret-Token"
         )
 
-        if recebido != segredo:
+        if secret_recebido != WEBHOOK_SECRET:
+            return jsonify({"error": "Unauthorized"}), 403
 
-            logging.warning(
-                "Webhook recusado: secret token não confere."
-            )
-
-            return jsonify({
-                "ok": False,
-                "error": "unauthorized"
-            }), 403
-
-    atualizacao = request.get_json(
-        silent=True
-    ) or {}
+    dados = request.get_json(silent=True) or {}
 
     mensagem = (
-        atualizacao.get("business_message")
-        or atualizacao.get("message")
+        dados.get("business_message")
+        or dados.get("message")
     )
 
     if not mensagem:
         return jsonify({"ok": True})
 
-    chat = mensagem.get("chat") or {}
-
+    chat = mensagem.get("chat", {})
     chat_id = chat.get("id")
+    texto = mensagem.get("text", "")
+    business_connection_id = mensagem.get("business_connection_id")
 
-    if not chat_id:
+    if not chat_id or not texto:
         return jsonify({"ok": True})
 
+    # ATENDER SOMENTE CONVERSAS PRIVADAS
     if chat.get("type") != "private":
         return jsonify({"ok": True})
 
-    remetente = mensagem.get("from") or {}
+    # IGNORAR MENSAGENS DE OUTROS BOTS
+    remetente = mensagem.get("from", {})
 
     if remetente.get("is_bot"):
         return jsonify({"ok": True})
 
-    texto = (
-        mensagem.get("text")
-        or mensagem.get("caption")
-        or ""
-    )
-
-    if texto:
-
-        resposta = responder(texto)
-
-    else:
-
-        resposta = (
-            "No momento, consigo atender mensagens de texto.\n\n"
-            "Descreva sua dúvida ou fale com nossa equipe:\n"
-            + SUPPORT_URL
-        )
-
     try:
-
-        enviar_mensagem(
+        processar_mensagem(
             chat_id,
-            resposta,
-            mensagem.get("business_connection_id")
+            texto,
+            business_connection_id
         )
-
     except Exception:
+        logging.exception("Erro ao processar mensagem.")
 
-        logging.exception(
-            "Erro ao enviar mensagem ao Telegram."
-        )
+    return jsonify({"ok": True})
 
-        return jsonify({
-            "ok": False
-        }), 500
-
-    return jsonify({
-        "ok": True
-    })
-
-
-# ==========================================
-# INICIALIZAÇÃO
-# ==========================================
 
 if __name__ == "__main__":
-
-    porta = int(
-        os.getenv("PORT", "10000")
-    )
-
-    app.run(
-        host="0.0.0.0",
-        port=porta
-    )
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
 
