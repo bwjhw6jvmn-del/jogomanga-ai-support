@@ -83,9 +83,7 @@ MENSAGEM_SAQUE = (
 RESPOSTAS_MANGA = {
     "1": (
         "Lia Support (IA) Oficial:\n"
-        "Para qualquer dúvida sobre recompensas, entre em contato "
-        "com esta especialista em recompensas para obter ajuda. Obrigada!\n"
-        "https://t.me/jogomanga_rowen"
+        "Certo, por favor, aguarde um instante; um de nossos representantes entrará nesta conversa."
     ),
 
     "2": (
