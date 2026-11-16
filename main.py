@@ -128,21 +128,21 @@ def enviar_resposta_saque(chat_id, business_connection_id):
 
         conversas[chat_id] = {"etapa": "menu"}
 
-    # Segunda mensagem: enviada 2 minutos após o código W.
+    # Segunda mensagem: 2 minutos após o recebimento do código W.
     enviar_mensagem(
         chat_id,
         MENSAGEM_SAQUE,
         business_connection_id
     )
 
-    # Os 5 minutos de inatividade começam somente agora.
+    # Somente agora começam os 5 minutos de inatividade.
     iniciar_timer_inatividade(chat_id, business_connection_id)
 
 
 def processar_mensagem(chat_id, texto, business_connection_id=None):
     texto = texto.strip()
 
-    # Comando para abrir ou retornar ao menu.
+    # Retornar ao menu ou iniciar atendimento.
     if texto.lower() in ["/start", "start", "menu"]:
         mostrar_menu(chat_id, business_connection_id)
         return
@@ -150,25 +150,23 @@ def processar_mensagem(chat_id, texto, business_connection_id=None):
     with lock:
         estado = conversas.get(chat_id)
 
-    # Primeiro contato: apresenta o menu.
+    # Primeiro contato.
     if estado is None:
         mostrar_menu(chat_id, business_connection_id)
         return
 
     etapa = estado.get("etapa")
 
-    # Opção 3: aguarda o código W.
+    # OPÇÃO 3: aguardar código W.
     if etapa == "aguardando_codigo_w":
 
         if texto.upper().startswith("W"):
             with lock:
                 conversas[chat_id] = {"etapa": "aguardando_saque"}
 
-                # Cancela qualquer contagem de inatividade anterior.
                 cancelar_timer(timers_inatividade, chat_id)
                 cancelar_timer(timers_saque, chat_id)
 
-                # Agenda a segunda mensagem para 2 minutos depois.
                 timer = threading.Timer(
                     120,
                     enviar_resposta_saque,
@@ -188,32 +186,38 @@ def processar_mensagem(chat_id, texto, business_connection_id=None):
 
         return
 
-    # Opção 3: aguarda os 2 minutos para enviar a segunda mensagem.
+    # OPÇÃO 3: aguardar os 2 minutos.
     if etapa == "aguardando_saque":
-        # Não altera o temporizador. O comando "menu" acima
-        # continua disponível para cancelar esse fluxo.
         return
 
-    # Opção 4: recebe a descrição do problema.
+    # OPÇÃO 4: aguardar a descrição do jogador.
     if etapa == "aguardando_descricao":
+
+        # A mensagem recebida é considerada a descrição.
+        # Não será interpretada como opção numérica.
         with lock:
-            conversas[chat_id] = {"etapa": "descricao_recebida"}
+            conversas[chat_id] = {"etapa": "menu"}
+
+        # Depois de receber a descrição, apresenta novamente o menu.
+        enviar_mensagem(
+            chat_id,
+            MENU,
+            business_connection_id
+        )
 
         iniciar_timer_inatividade(chat_id, business_connection_id)
         return
 
-    # Após receber a descrição, uma nova mensagem retorna ao menu.
-    if etapa == "descricao_recebida":
-        mostrar_menu(chat_id, business_connection_id)
-        return
-
-    # Somente números de 1 a 6 selecionam opções do menu.
+    # MENU: processar exclusivamente as opções de 1 a 6.
     if etapa == "menu" and texto in RESPOSTAS:
+
         cancelar_timer(timers_inatividade, chat_id)
 
         if texto == "3":
             with lock:
-                conversas[chat_id] = {"etapa": "aguardando_codigo_w"}
+                conversas[chat_id] = {
+                    "etapa": "aguardando_codigo_w"
+                }
 
             enviar_mensagem(
                 chat_id,
@@ -221,12 +225,15 @@ def processar_mensagem(chat_id, texto, business_connection_id=None):
                 business_connection_id
             )
 
-            # Não inicia os 5 minutos aqui.
-            # A contagem começará após a segunda mensagem.
+            # Aguardará o código W.
+            # Depois do código, aguardará 2 minutos.
+            # Após a segunda mensagem, iniciará os 5 minutos.
 
         elif texto == "4":
             with lock:
-                conversas[chat_id] = {"etapa": "aguardando_descricao"}
+                conversas[chat_id] = {
+                    "etapa": "aguardando_descricao"
+                }
 
             enviar_mensagem(
                 chat_id,
@@ -240,6 +247,7 @@ def processar_mensagem(chat_id, texto, business_connection_id=None):
             with lock:
                 conversas[chat_id] = {"etapa": "menu"}
 
+            # Cada número envia somente sua própria resposta.
             enviar_mensagem(
                 chat_id,
                 RESPOSTAS[texto],
@@ -250,8 +258,7 @@ def processar_mensagem(chat_id, texto, business_connection_id=None):
 
         return
 
-    # Não existem palavras-chave nem respostas genéricas.
-    # Uma entrada inválida no menu apresenta o menu novamente.
+    # Entrada inválida: apresenta novamente o menu.
     mostrar_menu(chat_id, business_connection_id)
 
 
