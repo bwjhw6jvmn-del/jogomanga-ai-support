@@ -94,7 +94,7 @@ def telegram_send(chat_id, text, business_connection_id=None):
         )
 
         if not response.ok:
-            # Não registrar a URL, pois ela contém o token do bot.
+            # Não registrar a URL, pois ela contém o token.
             logging.error(
                 "Telegram recusou o envio. HTTP %s. Resposta: %s",
                 response.status_code,
@@ -190,8 +190,7 @@ def processar_mensagem(chat_id, business_id, texto):
             mostrar_menu(chave, chat_id, business_id)
             return
 
-        # CORREÇÃO: qualquer opção de 1 a 6 funciona em qualquer etapa.
-        # Isso também cancela os temporizadores anteriores.
+        # Qualquer opção de 1 a 6 funciona em qualquer etapa.
         if texto in ("1", "2", "3", "4", "5", "6"):
             cancelar_timer(chave)
 
@@ -243,8 +242,14 @@ def processar_mensagem(chat_id, business_id, texto):
             cancelar_timer(chave)
             estados[chave] = "menu"
 
-            # A descrição não é encaminhada automaticamente a um atendente.
-            mostrar_menu(chave, chat_id, business_id)
+            # Não apresenta o menu automaticamente.
+            agendar_timer(
+                chave,
+                300,
+                lambda: encerrar_por_inatividade(
+                    chave, chat_id, business_id
+                )
+            )
             return
 
         # Recebimento do código W.
@@ -268,8 +273,8 @@ def processar_mensagem(chat_id, business_id, texto):
                 )
             return
 
-        # Mensagem fora das opções: apresenta novamente o menu.
-        mostrar_menu(chave, chat_id, business_id)
+        # Não envia menu automaticamente para mensagens comuns.
+        return
 
 
 @app.route("/", methods=["GET"])
