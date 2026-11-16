@@ -4,7 +4,7 @@ import logging
 import threading
 import requests
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify+
 
 app = Flask(__name__)
 
@@ -86,6 +86,12 @@ def telegram_send(chat_id, text, business_connection_id=None):
     if business_connection_id:
         payload["business_connection_id"] = business_connection_id
 
+    logging.info(
+        "Tentando enviar mensagem. Chat: %s | Business: %s",
+        chat_id,
+        bool(business_connection_id)
+    )
+
     try:
         response = requests.post(
             f"{TELEGRAM_API}/sendMessage",
@@ -95,19 +101,17 @@ def telegram_send(chat_id, text, business_connection_id=None):
 
         if not response.ok:
             logging.error(
-                "Telegram recusou o envio. HTTP %s. Resposta: %s",
+                "Falha no envio. HTTP %s. Resposta: %s",
                 response.status_code,
                 response.text[:1000]
             )
             return False
 
+        logging.info("Mensagem enviada com sucesso ao Telegram.")
         return True
 
-    except requests.RequestException as error:
-        logging.error(
-            "Erro de conexão ao enviar mensagem: %s",
-            str(error)
-        )
+    except requests.RequestException:
+        logging.exception("Erro de conexão ao enviar mensagem.")
         return False
 
 
