@@ -1,33 +1,14 @@
 
 import os
-import re
-import time
 import threading
-import logging
 import requests
-
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
 
-# CONFIGURAÇÕES
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+API_URL = f"https://api.telegram.org/bot{TOKEN}/"
 
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-
-# CONTROLE DE ATENDIMENTO
-atendimentos = {}
-timers_inatividade = {}
-timers_saque = {}
-lock = threading.RLock()
-
-TEMPO_INATIVIDADE = 300  # 5 minutos
-TEMPO_SAQUE = 120        # 2 minutos
-
-
-# MENU PRINCIPAL
 MENU = """Olá, sou a Lia, assistente virtual da Jogomanga! Estou aqui para ajudar. Selecione o tópico sobre o qual deseja tirar dúvidas:
 
 1️⃣ Recompensas e Promoções
@@ -35,12 +16,8 @@ MENU = """Olá, sou a Lia, assistente virtual da Jogomanga! Estou aqui para ajud
 3️⃣ Problemas com saques
 4️⃣ Conta e acesso
 5️⃣ Suporte humano
-6️⃣ Meu grupo VIP
+6️⃣ Meu grupo VIP"""
 
-Digite o número da opção desejada."""
-
-
-# RESPOSTAS DAS OPÇÕES
 RESPOSTAS = {
     "1": """Lia Support (IA) Oficial: Para qualquer dúvida sobre recompensas, entre em contato com esta especialista em recompensas para obter ajuda. Obrigada! https://t.me/Simmyonly""",
 
@@ -52,63 +29,24 @@ RESPOSTAS = {
 
     "5": """Lia Support (IA) Oficial: Aguarde um momento enquanto encaminhamos sua solicitação para nossa equipe de atendimento ao cliente.""",
 
-    "6": """Lia Support (IA) Oficial: Para qualquer dúvida sobre recompensas, entre em contato com este especialista em recompensas para obter ajuda. Obrigado! https://t.me/Simmyonly"""
+    "6": """Lia Support (IA) Oficial: Para qualquer dúvida sobre seu Grupo VIP, entre em contato com este especialista em VIPs para obter ajuda. Obrigado! https://t.me/Simmyonly"""
 }
 
+MENSAGEM_SAQUE = """Lia Support (IA) Oficial: Aguarde, seu saque está sendo processado. Os fundos chegarão em breve. Notificaremos você dentro de 10 minutos a 24 horas. Caso não tenha recebido seu pagamento, verifique novamente para obter uma atualização de confirmação. Agradecemos sua paciência."""
 
-# RESPOSTA APÓS 2 MINUTOS DO CÓDIGO W
-RESPOSTA_SAQUE_PROCESSANDO = """Lia Support (IA) Oficial: Aguarde, seu saque está sendo processado. Os fundos chegarão em breve. Notificaremos você dentro de 10 minutos a 24 horas. Caso não tenha recebido seu pagamento, verifique novamente para obter uma atualização de confirmação. Agradecemos sua paciência."""
-
-
-# ENCERRAMENTO POR INATIVIDADE
-RESPOSTA_INATIVIDADE = """Lia Support (IA) Oficial: Olá, detectamos que você não respondeu. Devido à falta de comunicação, encerramos a conversa. Obrigado! Se desejar retornar ao menu, digite "menu"."""
+ENCERRAMENTO = """Lia Support (IA) Oficial: Olá, detectamos que você não respondeu. Devido à falta de comunicação, encerramos a conversa. Obrigado! Se desejar retornar ao menu, digite "menu"."""
 
 
-# PALAVRAS-CHAVE CADASTRADAS
-RESPOSTAS_PALAVRAS = [
-    (
-        ["bonus", "bônus", "recompensa", "recompensas", "promoção", "promocao"],
-        """Para qualquer dúvida sobre bônus, entre em contato com este especialista em bônus para obter consultoria. Obrigado! https://t.me/Simmyonly"""
-    ),
-    (
-        ["cooperação", "cooperacao", "parceria", "parcerias"],
-        """Telegram: https://t.me/lancamentosmanga
-Entre no chat para colaborações com as plataformas MANGA e T1, obrigado!"""
-    ),
-    (
-        ["grupo vip"],
-        """Se você ainda tiver dúvidas sobre sua categoria, entre em contato com Simmy. https://t.me/Simmyonly"""
-    ),
-    (
-        [
-            "não estou conseguindo sacar o dinheirinho que depositei",
-            "nao estou conseguindo sacar o dinheirinho que depositei"
-        ],
-        """Olá, nosso plataforma possui um mecanismo de rollover. Isso significa que, após o seu depósito, você precisa apostar um montante igual ao valor depositado para cumprir os requisitos de rollover e desbloquear a barra de progresso.
-Por exemplo: se você depositar 50 yuan, precisará acumular apostas de 50 yuan. Não é necessário apostar tudo de uma vez; você pode fazer apostas em várias etapas, gradualmente, até atingir o requisito e completar a barra de progresso de rollover."""
-    ),
-    (
-        [
-            "problemas no saque",
-            "problema no saque",
-            "meu saque não caiu",
-            "meu saque nao caiu",
-            "meu saque está demorando",
-            "meu saque esta demorando"
-        ],
-        """Por favor, forneça o código de comando começando com a letra W em seu pedido de saque."""
-    )
-]
+conversas = {}
+timers_inatividade = {}
+timers_saque = {}
+lock = threading.RLock()
 
 
-def enviar_mensagem(chat_id, mensagem, business_connection_id=None):
-    if not BOT_TOKEN:
-        logging.error("TELEGRAM_BOT_TOKEN não configurado.")
-        return
-
+def enviar_mensagem(chat_id, texto, business_connection_id=None):
     dados = {
         "chat_id": chat_id,
-        "text": mensagem
+        "text": texto
     }
 
     if business_connection_id:
@@ -116,280 +54,256 @@ def enviar_mensagem(chat_id, mensagem, business_connection_id=None):
 
     try:
         resposta = requests.post(
-            f"{TELEGRAM_API}/sendMessage",
+            API_URL + "sendMessage",
             json=dados,
             timeout=20
         )
-        if not resposta.ok:
-            logging.error("Erro ao enviar mensagem: %s", resposta.text)
+        resposta.raise_for_status()
+        resultado = resposta.json()
 
-    except requests.RequestException:
-        logging.exception("Falha na comunicação com o Telegram.")
+        if not resultado.get("ok"):
+            print("Erro do Telegram:", resultado)
+
+        return resultado
+
+    except Exception as erro:
+        print("Erro ao enviar mensagem:", erro)
+        return None
 
 
-def chave_atendimento(chat_id, business_connection_id):
-    return f"{chat_id}:{business_connection_id or 'normal'}"
+def cancelar_timer(timer_dict, chat_id):
+    timer = timer_dict.pop(chat_id, None)
 
-
-def cancelar_timer(timer):
     if timer:
         timer.cancel()
 
 
-def encerrar_por_inatividade(chat_id, business_connection_id, chave):
+def iniciar_timer_inatividade(chat_id, business_connection_id):
     with lock:
-        atendimento = atendimentos.get(chave)
-
-        if not atendimento:
-            return
-
-        atendimento["estado"] = "encerrado"
-        atendimento["aguardando_menu"] = True
-        timers_inatividade.pop(chave, None)
-
-    enviar_mensagem(
-        chat_id,
-        RESPOSTA_INATIVIDADE,
-        business_connection_id
-    )
-
-
-def reiniciar_timer_inatividade(chat_id, business_connection_id, chave):
-    with lock:
-        timer_antigo = timers_inatividade.get(chave)
-        cancelar_timer(timer_antigo)
+        cancelar_timer(timers_inatividade, chat_id)
 
         timer = threading.Timer(
-            TEMPO_INATIVIDADE,
+            300,
             encerrar_por_inatividade,
-            args=(chat_id, business_connection_id, chave)
+            args=(chat_id, business_connection_id)
         )
 
         timer.daemon = True
-        timers_inatividade[chave] = timer
+        timers_inatividade[chat_id] = timer
         timer.start()
 
 
-def enviar_resposta_saque(chat_id, business_connection_id, chave):
+def encerrar_por_inatividade(chat_id, business_connection_id):
     with lock:
-        atendimento = atendimentos.get(chave)
-
-        if not atendimento:
-            return
-
-        if atendimento.get("estado") != "aguardando_confirmacao_saque":
-            return
-
-        atendimento["estado"] = "saque_processando"
-        timers_saque.pop(chave, None)
+        conversas.pop(chat_id, None)
+        timers_inatividade.pop(chat_id, None)
+        cancelar_timer(timers_saque, chat_id)
 
     enviar_mensagem(
         chat_id,
-        RESPOSTA_SAQUE_PROCESSANDO,
+        ENCERRAMENTO,
         business_connection_id
     )
 
 
-def agendar_resposta_saque(chat_id, business_connection_id, chave):
+def mostrar_menu(chat_id, business_connection_id=None):
     with lock:
-        timer_antigo = timers_saque.get(chave)
-        cancelar_timer(timer_antigo)
+        cancelar_timer(timers_inatividade, chat_id)
+        cancelar_timer(timers_saque, chat_id)
 
-        timer = threading.Timer(
-            TEMPO_SAQUE,
-            enviar_resposta_saque,
-            args=(chat_id, business_connection_id, chave)
-        )
+        conversas[chat_id] = {"etapa": "menu"}
 
-        timer.daemon = True
-        timers_saque[chave] = timer
-        timer.start()
+    enviar_mensagem(chat_id, MENU, business_connection_id)
+    iniciar_timer_inatividade(chat_id, business_connection_id)
 
 
-def normalizar(texto):
-    return texto.strip().lower()
+def enviar_resposta_saque(chat_id, business_connection_id):
+    with lock:
+        timers_saque.pop(chat_id, None)
 
+        estado = conversas.get(chat_id)
 
-def procurar_palavra_chave(texto):
-    texto = normalizar(texto)
+        if not estado or estado.get("etapa") != "aguardando_saque":
+            return
 
-    for palavras, resposta in RESPOSTAS_PALAVRAS:
-        for palavra in palavras:
-            if palavra in texto:
-                return resposta
+        conversas[chat_id] = {"etapa": "menu"}
 
-    return None
+    # Segunda mensagem: enviada 2 minutos após o código W.
+    enviar_mensagem(
+        chat_id,
+        MENSAGEM_SAQUE,
+        business_connection_id
+    )
+
+    # Os 5 minutos de inatividade começam somente agora.
+    iniciar_timer_inatividade(chat_id, business_connection_id)
 
 
 def processar_mensagem(chat_id, texto, business_connection_id=None):
-    chave = chave_atendimento(chat_id, business_connection_id)
-    texto_original = texto.strip()
-    texto = normalizar(texto_original)
+    texto = texto.strip()
 
-    with lock:
-        if chave not in atendimentos:
-            atendimentos[chave] = {
-                "estado": "menu",
-                "aguardando_menu": True
-            }
-
-    reiniciar_timer_inatividade(
-        chat_id,
-        business_connection_id,
-        chave
-    )
-
-    # COMANDO MENU
-    if texto == "menu":
-        with lock:
-            atendimentos[chave]["estado"] = "menu"
-            atendimentos[chave]["aguardando_menu"] = True
-
-        enviar_mensagem(chat_id, MENU, business_connection_id)
+    # Comando para abrir ou retornar ao menu.
+    if texto.lower() in ["/start", "start", "menu"]:
+        mostrar_menu(chat_id, business_connection_id)
         return
 
     with lock:
-        atendimento = atendimentos[chave]
-        estado = atendimento.get("estado", "menu")
-        aguardando_menu = atendimento.get("aguardando_menu", True)
+        estado = conversas.get(chat_id)
 
-    # MENU PRINCIPAL: ESCOLHA NUMÉRICA
-    if aguardando_menu and texto in RESPOSTAS:
+    # Primeiro contato: apresenta o menu.
+    if estado is None:
+        mostrar_menu(chat_id, business_connection_id)
+        return
+
+    etapa = estado.get("etapa")
+
+    # Opção 3: aguarda o código W.
+    if etapa == "aguardando_codigo_w":
+
+        if texto.upper().startswith("W"):
+            with lock:
+                conversas[chat_id] = {"etapa": "aguardando_saque"}
+
+                # Cancela qualquer contagem de inatividade anterior.
+                cancelar_timer(timers_inatividade, chat_id)
+                cancelar_timer(timers_saque, chat_id)
+
+                # Agenda a segunda mensagem para 2 minutos depois.
+                timer = threading.Timer(
+                    120,
+                    enviar_resposta_saque,
+                    args=(chat_id, business_connection_id)
+                )
+
+                timer.daemon = True
+                timers_saque[chat_id] = timer
+                timer.start()
+
+        else:
+            enviar_mensagem(
+                chat_id,
+                "Por favor, envie o código de comando começando com a letra W.",
+                business_connection_id
+            )
+
+        return
+
+    # Opção 3: aguarda os 2 minutos para enviar a segunda mensagem.
+    if etapa == "aguardando_saque":
+        # Não altera o temporizador. O comando "menu" acima
+        # continua disponível para cancelar esse fluxo.
+        return
+
+    # Opção 4: recebe a descrição do problema.
+    if etapa == "aguardando_descricao":
         with lock:
-            atendimentos[chave]["aguardando_menu"] = False
+            conversas[chat_id] = {"etapa": "descricao_recebida"}
+
+        iniciar_timer_inatividade(chat_id, business_connection_id)
+        return
+
+    # Após receber a descrição, uma nova mensagem retorna ao menu.
+    if etapa == "descricao_recebida":
+        mostrar_menu(chat_id, business_connection_id)
+        return
+
+    # Somente números de 1 a 6 selecionam opções do menu.
+    if etapa == "menu" and texto in RESPOSTAS:
+        cancelar_timer(timers_inatividade, chat_id)
 
         if texto == "3":
             with lock:
-                atendimentos[chave]["estado"] = "aguardando_codigo_w"
+                conversas[chat_id] = {"etapa": "aguardando_codigo_w"}
 
-        elif texto == "4":
-            with lock:
-                atendimentos[chave]["estado"] = "aguardando_descricao"
-
-        elif texto == "5":
-            with lock:
-                atendimentos[chave]["estado"] = "suporte_humano"
-
-        else:
-            with lock:
-                atendimentos[chave]["estado"] = "atendido"
-
-        enviar_mensagem(
-            chat_id,
-            RESPOSTAS[texto],
-            business_connection_id
-        )
-        return
-
-    # RECEBIMENTO DO CÓDIGO W
-    if estado == "aguardando_codigo_w":
-        codigo_w = re.search(r"\bW[A-Za-z0-9_-]*", texto_original, re.IGNORECASE)
-
-        if codigo_w:
-            with lock:
-                atendimentos[chave]["estado"] = "aguardando_confirmacao_saque"
-
-            agendar_resposta_saque(
-                chat_id,
-                business_connection_id,
-                chave
-            )
-        else:
             enviar_mensagem(
                 chat_id,
                 RESPOSTAS["3"],
                 business_connection_id
             )
 
-        return
+            # Não inicia os 5 minutos aqui.
+            # A contagem começará após a segunda mensagem.
 
-    # CONTA E ACESSO: RECEBE A DESCRIÇÃO DO PROBLEMA
-    if estado == "aguardando_descricao":
-        resposta = procurar_palavra_chave(texto)
+        elif texto == "4":
+            with lock:
+                conversas[chat_id] = {"etapa": "aguardando_descricao"}
 
-        if resposta:
-            enviar_mensagem(chat_id, resposta, business_connection_id)
-        else:
             enviar_mensagem(
                 chat_id,
-                """Por favor, explique claramente o problema que está enfrentando para que possamos entender e ajudá-lo(a) melhor.""",
+                RESPOSTAS["4"],
                 business_connection_id
             )
+
+            iniciar_timer_inatividade(chat_id, business_connection_id)
+
+        else:
+            with lock:
+                conversas[chat_id] = {"etapa": "menu"}
+
+            enviar_mensagem(
+                chat_id,
+                RESPOSTAS[texto],
+                business_connection_id
+            )
+
+            iniciar_timer_inatividade(chat_id, business_connection_id)
+
         return
 
-    # IDENTIFICAÇÃO DE PALAVRAS-CHAVE EM MENSAGENS LIVRES
-    resposta = procurar_palavra_chave(texto)
-
-    if resposta:
-        enviar_mensagem(chat_id, resposta, business_connection_id)
-        return
-
-    # RESPOSTA PADRÃO
-    enviar_mensagem(
-        chat_id,
-        """Por favor, explique claramente o problema que está enfrentando para que possamos entender e ajudá-lo(a) melhor.""",
-        business_connection_id
-    )
+    # Não existem palavras-chave nem respostas genéricas.
+    # Uma entrada inválida no menu apresenta o menu novamente.
+    mostrar_menu(chat_id, business_connection_id)
 
 
 @app.route("/", methods=["GET"])
 def inicio():
     return jsonify({
         "status": "online",
-        "bot": "Lia - Jogo Manga"
+        "bot": "Lia - Suporte Jogo Manga"
     })
 
 
 @app.route("/telegram/webhook", methods=["POST"])
 def webhook():
-    if WEBHOOK_SECRET:
-        secret_recebido = request.headers.get(
-            "X-Telegram-Bot-Api-Secret-Token"
-        )
-
-        if secret_recebido != WEBHOOK_SECRET:
-            return jsonify({"error": "Unauthorized"}), 403
-
-    dados = request.get_json(silent=True) or {}
+    update = request.get_json(silent=True) or {}
 
     mensagem = (
-        dados.get("business_message")
-        or dados.get("message")
+        update.get("business_message")
+        or update.get("message")
     )
 
     if not mensagem:
         return jsonify({"ok": True})
 
     chat = mensagem.get("chat", {})
-    chat_id = chat.get("id")
-    texto = mensagem.get("text", "")
-    business_connection_id = mensagem.get("business_connection_id")
 
-    if not chat_id or not texto:
-        return jsonify({"ok": True})
-
-    # ATENDER SOMENTE CONVERSAS PRIVADAS
     if chat.get("type") != "private":
         return jsonify({"ok": True})
 
-    # IGNORAR MENSAGENS DE OUTROS BOTS
     remetente = mensagem.get("from", {})
 
     if remetente.get("is_bot"):
         return jsonify({"ok": True})
 
-    try:
-        processar_mensagem(
-            chat_id,
-            texto,
-            business_connection_id
-        )
-    except Exception:
-        logging.exception("Erro ao processar mensagem.")
+    texto = mensagem.get("text", "")
+
+    if not texto:
+        return jsonify({"ok": True})
+
+    chat_id = chat.get("id")
+    business_connection_id = mensagem.get("business_connection_id")
+
+    processar_mensagem(
+        chat_id,
+        texto,
+        business_connection_id
+    )
 
     return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
 
