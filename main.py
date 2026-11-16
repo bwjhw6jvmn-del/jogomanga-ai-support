@@ -172,7 +172,7 @@ RESPOSTAS_PLATAFORMAS = {
         "Lia Support (IA) Oficial:\n"
         "Desculpe, não fui programado para resolver problemas do Grupo FP. "
         "Por favor, entre em contato com o suporte online. Obrigado!\n"
-        "https://direct.lc.chat/14942394"
+        "https://direct.lc.chat/19730795"
     )
 }
 
