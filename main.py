@@ -83,7 +83,9 @@ MENSAGEM_SAQUE = (
 RESPOSTAS_MANGA = {
     "1": (
         "Lia Support (IA) Oficial:\n"
-        "Certo, por favor, aguarde um instante; um de nossos representantes entrará nesta conversa."
+        "Para qualquer dúvida sobre recompensas, entre em contato "
+        "com esta especialista em recompensas para obter ajuda. Obrigada!\n"
+        "https://t.me/jogomanga_Rowen"
     ),
 
     "2": (
@@ -110,8 +112,7 @@ RESPOSTAS_MANGA = {
 
     "5": (
         "Lia Support (IA) Oficial:\n"
-        "Por favor, aguarde até que um de nossos representantes "
-        "entre nesta conversa. Obrigado."
+        "Para solicitar acesso ao canal VIP do Grupo Manga, entre em contato com o specialist VIP, Rowen: https://t.me/jogomanga_Rowen"
     )
 }
 
